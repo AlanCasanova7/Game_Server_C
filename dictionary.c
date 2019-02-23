@@ -1,7 +1,7 @@
 #include "dictionary.h"
+#include "hash.h"
 #include <string.h>
 #include <stdio.h>
-#include "hash.h"
 
 dictionary_t* new_dictionary(const size_t size){
     dictionary_t* to_return = malloc(sizeof(dictionary_t));
