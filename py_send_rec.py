@@ -11,5 +11,5 @@ sock.sendto(pack, (UDP_IP, UDP_PORT))
 
 #sock.bind((UDP_IP, UDP_PORT))
 
-data, addr = sock.recvfrom(4096)
-print("received message: ", data)
+#data, addr = sock.recvfrom(4096)
+#print("received message: ", data)

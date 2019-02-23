@@ -1,7 +1,6 @@
 #include "game_server.h"
-#include <stdio.h>
 
-game_server_t* game_server_new(int port, int max_connected_sockets, int max_command_table){
+game_server_t* game_server_new(int port, int max_connected_sockets, int max_command_table, float update_frequency){
     game_server_t* to_return = malloc(sizeof(game_server_t));
     memset(to_return, 0, sizeof(game_server_t));
     WSADATA wsa_data;
@@ -57,7 +56,35 @@ game_server_t* game_server_new(int port, int max_connected_sockets, int max_comm
     to_return->connected_clients = new_dictionary(max_connected_sockets);
     to_return->command_table = new_dictionary(max_command_table);
 
-    QueryPerformanceFrequency(&to_return->frequency);
+    QueryPerformanceFrequency(&to_return->time_frequency);
 
+    to_return->update_frequency.tv_sec = update_frequency;
     return to_return;
+}   
+
+int game_server_run(game_server_t* game_server){
+    QueryPerformanceCounter(&game_server->current_time);
+    float time_stamp = game_server->current_time.QuadPart / game_server->time_frequency.QuadPart;
+    printf("tick, timestamp: %f\n", time_stamp);
+
+    FD_ZERO(&game_server->write_set);   
+    FD_ZERO(&game_server->read_set);
+
+    FD_SET(game_server->server_socket, &game_server->read_set);
+
+    int error = 0;
+
+    error = server_internal_select(game_server);
+
+    key_value_t* current_entry = (key_value_t*)game_server->connected_clients->first_entry;
+    while(current_entry != NULL)
+    {
+        error = server_internal_process_client(game_server, (game_client_t*)current_entry->value);
+
+        error = server_internal_process_client_ack_package(game_server, (game_client_t*)current_entry->value);
+
+        current_entry = current_entry->next_dict_entry;
+    }
+
+    return error;
 }
