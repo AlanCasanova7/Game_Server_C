@@ -9,35 +9,63 @@
 
 #pragma comment(lib, "ws2_32.lib")
 
-typedef struct game_client{
+typedef struct game_client
+{
     unsigned int malus;
-    dictionary_t* ack_table;
-    queue_t* send_queue;
+    dictionary_t *ack_table;
+    queue_t *send_queue;
     SOCKADDR_IN current_adress;
 } game_client_t;
 
-typedef struct game_server{
+typedef struct game_server
+{
     SOCKET server_socket;
     SOCKADDR_IN server_adress;
-    
+
     FD_SET write_set;
     FD_SET read_set;
     unsigned int total_sockets;
-    
+
     LARGE_INTEGER time_frequency;
     LARGE_INTEGER current_time;
 
-    dictionary_t* command_table;
-
     unsigned int number_of_connected_clients; //Unsure if needed
-    dictionary_t* connected_clients;
+    dictionary_t *connected_clients;
 
     struct timeval update_frequency;
+
+    unsigned int packet_counter;
+    
+    dictionary_t* game_objects;
+    unsigned int game_object_counter;
+
+    void (**command_table)(struct game_server * game_server);
 } game_server_t;
 
-game_client_t* game_client_new();
-game_server_t* game_server_new(int port, int max_connected_sockets, int max_command_table, float update_frequency);
-int game_server_run(game_server_t* game_server);
+typedef struct game_object
+{
+    float x, y, z;
+    game_client_t *owner;
+    unsigned int game_object_id;
+    //unsigned int interna_type_id;
+} game_object_t;
+
+typedef struct packet
+{
+    unsigned int packet_id;
+    unsigned int attempts;
+    unsigned char try_once;
+    float send_after;
+    float expires_after;
+    char data[BUFFER_SIZE];
+} packet_t;
+
+game_client_t *game_client_new();
+game_server_t *game_server_new(int port, int max_connected_sockets, char max_command_table, int max_game_objects, float update_frequency);
+void add_command(game_server_t* game_server, char command, void (*func_ptr)(game_server_t * game_server));
+packet_t *packet_new(game_server_t *game_server, char *data);
+
+int game_server_run(game_server_t *game_server);
 
 static int inline server_internal_select(game_server_t *game_server)
 {
@@ -58,11 +86,10 @@ static int inline server_internal_select(game_server_t *game_server)
                 if (byte_received > 0)
                 {
                     char command = current_data[0];
-                    void *func_ptr = get_value(game_server->command_table, (void*)&command, sizeof(char));
-                    printf("%d\n", command);               
+                    void (*func_ptr)(game_server_t * game_server) = game_server->command_table[(int)command];
+                    printf("received command = %d\n", command);
                     if (func_ptr != NULL)
                     {
-                        void (*func_ptr)(game_server_t* game_server) = NULL;
                         (*func_ptr)(game_server);
                     }
                     else
@@ -90,7 +117,8 @@ static int inline server_internal_select(game_server_t *game_server)
     return 0;
 }
 
-static int inline server_internal_process_client(game_server_t* game_server, game_client_t* current_client){
+static int inline server_internal_process_client(game_server_t *game_server, game_client_t *current_client)
+{
     for (int i = 0; i < current_client->send_queue->elements; i++)
     {
         char *data = dequeue(current_client->send_queue);
@@ -108,7 +136,8 @@ static int inline server_internal_process_client(game_server_t* game_server, gam
     return 0;
 }
 
-static int inline server_internal_process_client_ack_package(game_server_t* game_server, game_client_t* current_client){
+static int inline server_internal_process_client_ack_package(game_server_t *game_server, game_client_t *current_client)
+{
     printf("Processing ACK");
     return 0;
     //TO DO: ACK IMPLEMENTATION.
