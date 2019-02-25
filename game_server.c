@@ -58,8 +58,9 @@ game_server_t *game_server_new(int port, int max_connected_sockets, char max_com
     to_return->game_objects = new_dictionary(max_game_objects);
 
     to_return->max_command_table = max_command_table;
-    to_return->command_table = malloc(sizeof(void(*)(game_server_t*))*max_command_table);
-    for(int i = 0; i < max_command_table; i++){
+    to_return->command_table = malloc(sizeof(void (*)(game_server_t *)) * max_command_table);
+    for (int i = 0; i < max_command_table; i++)
+    {
         to_return->command_table[i] = NULL;
     }
 
@@ -69,8 +70,9 @@ game_server_t *game_server_new(int port, int max_connected_sockets, char max_com
     return to_return;
 }
 
-game_client_t *game_client_new(SOCKADDR_IN adress){
-    game_client_t* to_return = malloc(sizeof(game_client_t));
+game_client_t *game_client_new(SOCKADDR_IN adress)
+{
+    game_client_t *to_return = malloc(sizeof(game_client_t));
     memset(to_return, 0, sizeof(game_client_t));
 
     to_return->ack_table = new_dictionary(100);
@@ -78,6 +80,16 @@ game_client_t *game_client_new(SOCKADDR_IN adress){
 
     to_return->adress = adress;
 
+    return to_return;
+}
+
+game_object_t *game_object_new(game_server_t *game_server)
+{
+    game_object_t *to_return = malloc(sizeof(game_object_t));
+    memset(to_return, 0, sizeof(game_object_t));
+
+    to_return->game_object_id = 254; //game_server->game_object_counter;
+    game_server->game_object_counter += 1;
     return to_return;
 }
 
@@ -109,13 +121,22 @@ int game_server_run(game_server_t *game_server)
     return error;
 }
 
-packet_t *packet_new(game_server_t *game_server, char *data, SOCKADDR_IN current_adress){
-    packet_t* to_return = malloc(sizeof(packet_t));
+packet_t *packet_new(game_server_t *game_server, char *data, SOCKADDR_IN sender_adress)
+{
+    //TODO DUE TO THIS IMPLEMENTATION THE SERVER WILL ALWAYS SEND 4096 Bytes
+
+    packet_t *to_return = malloc(sizeof(packet_t));
     memset(to_return, 0, sizeof(packet_t));
+
+    memcpy(to_return->data, data, strlen(data));
+    to_return->sender_adress = sender_adress;
+    to_return->packet_id = game_server->packet_counter;
+    game_server->packet_counter += 1;
+
     return to_return;
 }
 
-void add_command(game_server_t *game_server, char command, void (*func_ptr)(game_server_t * game_server, packet_t* packet))
+void add_command(game_server_t *game_server, char command, void (*func_ptr)(game_server_t *game_server, packet_t *packet))
 {
     game_server->command_table[(int)command] = func_ptr;
 }
