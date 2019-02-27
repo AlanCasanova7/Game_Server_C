@@ -7,6 +7,8 @@
 
 #define BUFFER_SIZE 4096
 
+#define CLIENT_CMD_UPDATE_OBJ 2
+
 #pragma comment(lib, "ws2_32.lib")
 
 typedef struct packet
@@ -68,7 +70,7 @@ game_client_t *game_client_new(SOCKADDR_IN adress);
 game_object_t *game_object_new(game_server_t *game_server);
 game_server_t *game_server_new(int port, int max_connected_sockets, char max_command_table, int max_game_objects, float update_frequency);
 void add_command(game_server_t *game_server, char command, void (*func_ptr)(game_server_t *game_server, packet_t *packet));
-packet_t *packet_new(game_server_t *game_server, char *data, SOCKADDR_IN sender_adress);
+packet_t *packet_new(game_server_t *game_server, char *data, SOCKADDR_IN sender_adress, size_t packet_size);
 
 int game_server_run(game_server_t *game_server);
 
@@ -93,8 +95,8 @@ static int inline server_internal_select(game_server_t *game_server)
                     char command = current_data[0];
                     void (*func_ptr)(game_server_t * game_server, packet_t * packet) = game_server->command_table[(int)command];
 
-                    packet_t *current_packet = packet_new(game_server, current_data, current_adress);
-                    printf("received command = %d\n", command);
+                    packet_t *current_packet = packet_new(game_server, current_data, current_adress, byte_received);
+                    printf("received command = %d, total_bytes: %d\n", command, byte_received);
                     if (func_ptr != NULL)
                     {
                         (*game_server->command_table[(int)command])(game_server, current_packet);
@@ -103,7 +105,6 @@ static int inline server_internal_select(game_server_t *game_server)
                     {
                         printf("RECEIVED UNKOWN COMMAND\n");
                     }
-                    free(current_packet);
                 }
                 else
                 {
@@ -151,4 +152,29 @@ static int inline server_internal_process_client_ack_package(game_server_t *game
     printf("Processing ACK\t");
     return 0;
     //TO DO: ACK IMPLEMENTATION.
+}
+
+static int inline server_internal_tick_game_object(game_server_t *game_server, game_object_t *current_game_object)
+{
+    printf("ticked game_object with id: %d at position: %f, %f, %f\t", current_game_object->game_object_id, current_game_object->x, current_game_object->y, current_game_object->z);
+
+    char data[sizeof(char) + sizeof(char) + sizeof(unsigned int) + (sizeof(float) * 3)];
+    data[0] = CLIENT_CMD_UPDATE_OBJ;
+    memcpy(&data[1], &current_game_object->game_object_id, sizeof(unsigned int));
+    memcpy(&data[5], &current_game_object->x, sizeof(float));
+    memcpy(&data[9], &current_game_object->y, sizeof(float));
+    memcpy(&data[13], &current_game_object->z, sizeof(float));
+
+    key_value_t *current_entry = (key_value_t *)game_server->connected_clients->first_entry;
+    while (current_entry != NULL)
+    {
+        game_client_t* current_client = (game_client_t*)current_entry->value;
+        if(memcmp(current_game_object->owner, current_client, sizeof(game_client_t)))
+        {
+            packet_t *update_pkt = packet_new(game_server, data, current_client->adress, sizeof(data));
+            enqueue(current_client->send_queue, update_pkt);
+        }
+        current_entry = current_entry->next_dict_entry;
+    }
+    return 0;
 }

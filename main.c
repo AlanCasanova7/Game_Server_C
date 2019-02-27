@@ -3,6 +3,7 @@
 #define SERVER_CMD_HELLO_WORLD 0
 #define SERVER_CMD_JOIN 1
 #define SERVER_CMD_ACK 2
+#define SERVER_CMD_UPDATE 3
 
 #define CLIENT_CMD_WELCOME 0
 #define CLIENT_CMD_SPAWN_OBJ 1
@@ -10,6 +11,7 @@
 void cmd_hello_world(game_server_t *game_server, packet_t *packet);
 void cmd_join(game_server_t *game_server, packet_t *packet);
 void cmd_ack(game_server_t *game_server, packet_t *packet);
+void cmd_update(game_server_t *game_server, packet_t *packet);
 
 int main(int argc, char **argv)
 {
@@ -20,6 +22,8 @@ int main(int argc, char **argv)
     add_command(server, SERVER_CMD_JOIN, cmd_join);
 
     add_command(server, SERVER_CMD_ACK, cmd_ack);
+
+    add_command(server, SERVER_CMD_UPDATE, cmd_update);
 
     for (;;)
     {
@@ -74,7 +78,7 @@ void cmd_join(game_server_t *game_server, packet_t *packet)
         memcpy(&rec_z, &data[14], sizeof(float));
         printf("Created data buffer with the following data:\ndata 0 = %d, data 1 = %d, id = %u, x = %f, y = %f, z = %f\n", (char)data[0], (char)data[1], rec_id, rec_x, rec_y, rec_z);
 
-        packet_t *welcome_pkt = packet_new(game_server, data, new_client->adress);
+        packet_t *welcome_pkt = packet_new(game_server, data, new_client->adress, sizeof(data));
         welcome_pkt->need_ack = 1;
         enqueue(new_client->send_queue, welcome_pkt);
 
@@ -90,7 +94,7 @@ void cmd_join(game_server_t *game_server, packet_t *packet)
             memcpy(&data_to_spw_obj[14], &game_obj->y, sizeof(float));
             memcpy(&data_to_spw_obj[18], &game_obj->z, sizeof(float));
 
-            packet_t *spawn_pkt = packet_new(game_server, data_to_spw_obj, new_client->adress);
+            packet_t *spawn_pkt = packet_new(game_server, data_to_spw_obj, new_client->adress, sizeof(data_to_spw_obj));
             spawn_pkt->need_ack = 1;
             enqueue(new_client->send_queue, spawn_pkt);
 
@@ -114,7 +118,7 @@ void cmd_join(game_server_t *game_server, packet_t *packet)
                 memcpy(&data_to_spw_self[14], &avatar->y, sizeof(float));
                 memcpy(&data_to_spw_self[18], &avatar->z, sizeof(float));
 
-                packet_t *spawn_yourself_pkt = packet_new(game_server, data_to_spw_self, new_client->adress);
+                packet_t *spawn_yourself_pkt = packet_new(game_server, data_to_spw_self, new_client->adress, sizeof(data_to_spw_self));
                 spawn_yourself_pkt->need_ack = 1;
                 enqueue(client_to_spawn_yourself->send_queue, spawn_yourself_pkt);
             }
@@ -126,15 +130,6 @@ void cmd_join(game_server_t *game_server, packet_t *packet)
 
 void cmd_ack(game_server_t *game_server, packet_t *packet)
 {
-    // IN_ADDR sender_adress = packet->sender_adress.sin_addr;
-    // game_client_t* retrieved_client = get_value(game_server->connected_clients, (void*)&sender_adress, sizeof(sender_adress));
-    // if(retrieved_client != NULL){
-    //     game_object_t* retrieved_game_object = get_value(game_server->game_objects, (void*)&packet->data[1], sizeof(packet->data[1]));
-    //     if(retrieved_game_object != NULL && !memcmp(retrieved_game_object->owner, retrieved_client, sizeof(game_client_t))){
-
-    //     }
-    // }
-
     IN_ADDR sender_adress = packet->sender_adress.sin_addr;
     game_client_t *retrieved_client = get_value(game_server->connected_clients, (void *)&sender_adress, sizeof(sender_adress));
     if (retrieved_client != NULL)
@@ -142,6 +137,33 @@ void cmd_ack(game_server_t *game_server, packet_t *packet)
         if (get_key_value(retrieved_client->ack_table, (void *)&packet->data[1], sizeof(packet->data[1])))
         {
             remove_key_value(retrieved_client->ack_table, (void *)&packet->data[1], sizeof(packet->data[1]));
+        }
+    }
+}
+
+void cmd_update(game_server_t *game_server, packet_t *packet)
+{
+    IN_ADDR sender_adress = packet->sender_adress.sin_addr;
+    game_client_t *retrieved_client = get_value(game_server->connected_clients, (void *)&sender_adress, sizeof(sender_adress));
+    if (retrieved_client != NULL)
+    {
+        printf("\n\n\nFOUND CLIENT\n");
+
+        unsigned int game_object_id = -1;
+        memcpy(&game_object_id, &packet->data[2], sizeof(unsigned int));
+        game_object_t *retrieved_game_object = get_value(game_server->game_objects, (void *)&game_object_id, sizeof(unsigned int));
+        if (retrieved_game_object != NULL && !memcmp(retrieved_game_object->owner, retrieved_client, sizeof(game_client_t)))
+        {
+            printf("\nFOUND GAMEOBJECT: %d\n", game_object_id);
+
+            float new_x, new_y, new_z;
+            memcpy(&new_x, &packet->data[5], sizeof(float));
+            memcpy(&new_y, &packet->data[9], sizeof(float));
+            memcpy(&new_z, &packet->data[13], sizeof(float));
+
+            retrieved_game_object->x = new_x;
+            retrieved_game_object->y = new_y;
+            retrieved_game_object->z = new_z;
         }
     }
 }

@@ -88,7 +88,7 @@ game_object_t *game_object_new(game_server_t *game_server)
     game_object_t *to_return = malloc(sizeof(game_object_t));
     memset(to_return, 0, sizeof(game_object_t));
 
-    to_return->game_object_id = 254; //game_server->game_object_counter;
+    to_return->game_object_id = game_server->game_object_counter; //game_server->game_object_counter;
     game_server->game_object_counter += 1;
     return to_return;
 }
@@ -118,17 +118,26 @@ int game_server_run(game_server_t *game_server)
         current_entry = current_entry->next_dict_entry;
     }
 
+    current_entry = (key_value_t*)game_server->game_objects->first_entry;
+    while (current_entry != NULL)
+    {
+        error = server_internal_tick_game_object(game_server, (game_object_t *)current_entry->value);
+
+        current_entry = current_entry->next_dict_entry;
+    }
+
     return error;
 }
 
-packet_t *packet_new(game_server_t *game_server, char *data, SOCKADDR_IN sender_adress)
+packet_t *packet_new(game_server_t *game_server, char *data, SOCKADDR_IN sender_adress, size_t packet_size)
 {
     //TODO DUE TO THIS IMPLEMENTATION THE SERVER WILL ALWAYS SEND 4096 Bytes
 
     packet_t *to_return = malloc(sizeof(packet_t));
     memset(to_return, 0, sizeof(packet_t));
 
-    memcpy(to_return->data, data, strlen(data));
+    memcpy(to_return->data, data, packet_size); 
+
     to_return->sender_adress = sender_adress;
     to_return->packet_id = game_server->packet_counter;
     game_server->packet_counter += 1;
